@@ -11,7 +11,7 @@
 #include "JString.h"
 #include "skk.h"
 
-#define SSK_BINDIC_FILE 	"ssk_mdic.bin"
+// #define SSK_BINDIC_FILE 	"ssk_mdic.bin" // Defined in skk.h
 #define SSK_BIN_HEAD_SIZE 12
 
 // skkの開始
@@ -19,7 +19,7 @@
 //
 uint32_t SKK::begin(const char* param_path) {
 	char path[64] = ""; 
-	// uint32_t rc; // Not directly used after fopen
+	uint32_t rc; // Declared here
 
 	// fatMountDefault() should be called once in NDS initialization
 	// For now, assume it's handled or will be called in kanaIME_init()

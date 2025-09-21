@@ -15,3 +15,8 @@ gemini_chat_log_*.txt
 # Unused font files
 ipaex_font_data.c
 ipaex_font_sheet.png
+
+# Cloned source for analysis
+OpenWnn/
+fcitx5-skk/
+arduino_skk/

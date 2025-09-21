@@ -51,4 +51,3 @@ During development, an on-screen debug display can be enabled to monitor the int
 This information is displayed on the top screen at coordinates (10, 30), (10, 40), and (10, 50) respectively.
 
 ## License
-MIT

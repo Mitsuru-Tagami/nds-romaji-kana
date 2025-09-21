@@ -11,12 +11,10 @@
 
 #define SSK_BINDIC_FILE 	  "ssk_dic_m.bin"
 #define SSK_BIN_HEAD_SIZE 	12
-// #define SSK_SD_CS           10 // Not needed for NDS libfat
 
 class SKK {
  private:
   FILE*  fp_skk;                       // 辞書ファイルポインタ
-  uint8_t  sd_cs;                     // SD SPI CS
   uint32_t size_keyword;              // 辞書登録単語数
   uint32_t keyword_index_top;         // キーワードインデックス先頭位置
   uint32_t keyword_data_top;          // キーワードデータ先頭位置
@@ -24,7 +22,7 @@ class SKK {
   uint32_t max_data_len_index = 0;    // 最大キーワードデータのインデックス
 
  public:
-  uint32_t  begin(uint8_t sd_cs=SSK_SD_CS, const char* param_path=NULL);   // SKK辞書利用開始
+  uint32_t  begin(const char* param_path);   // SKK辞書利用開始
   uint8_t   end();                                                         // SKK辞書利用終了
 
  private:   
