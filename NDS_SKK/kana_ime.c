@@ -31,11 +31,27 @@ static void drawString(int x, int y, u16* buffer, const char* str, u16 color) {
     }
 }
 
+// Helper function to draw a string from a u16 array
+static void drawStringU16(int x, int y, u16* buffer, const u16* str_u16, u16 color) {
+    int current_x = x;
+    for (int i = 0; str_u16[i] != 0; i++) {
+        current_x += drawFont(current_x, y, buffer, str_u16[i], color);
+    }
+}
+
 static u16* mainScreenBuffer = NULL;
 static char input_romaji_buffer[32] = {0};
 static int input_romaji_len = 0;
 static u16 converted_kana_buffer[256] = {0};
 static int converted_kana_len = 0;
+
+static char s_kouho_list[256] = {0}; // Stored candidate list from SKK
+static char s_out_okuri[32] = {0};   // Stored okuri from SKK
+static uint16_t s_current_candidate_index = 0; // Index of the currently selected candidate
+static uint16_t s_num_candidates = 0; // Total number of candidates
+
+static u16 s_final_output_buffer[256] = {0}; // Buffer for committed text
+static int s_final_output_len = 0;
 
 ImeMode currentImeMode = IME_MODE_HIRAGANA;
 
@@ -46,6 +62,12 @@ static void switchMode(void) {
     input_romaji_buffer[0] = '\0';
     converted_kana_len = 0;
     converted_kana_buffer[0] = 0;
+    s_current_candidate_index = 0;
+    s_num_candidates = 0;
+    s_kouho_list[0] = '\0';
+    s_out_okuri[0] = '\0';
+    s_final_output_len = 0;
+    s_final_output_buffer[0] = 0;
 }
 
 void kanaIME_init(void) {
@@ -88,6 +110,14 @@ bool kanaIME_update(void) {
         }
     } else if (keysDown() & KEY_SELECT) {
         switchMode();
+    } else if (keysDown() & KEY_UP) { // Cycle through candidates
+        if (s_num_candidates > 0) {
+            s_current_candidate_index = (s_current_candidate_index + 1) % s_num_candidates;
+        }
+    } else if (keysDown() & KEY_DOWN) { // Cycle through candidates (reverse)
+        if (s_num_candidates > 0) {
+            s_current_candidate_index = (s_current_candidate_index + s_num_candidates - 1) % s_num_candidates;
+        }
     }
 
     // --- Character Processing ---
@@ -96,30 +126,80 @@ bool kanaIME_update(void) {
             if (input_romaji_len > 0) {
                 input_romaji_len--;
                 input_romaji_buffer[input_romaji_len] = '\0';
-            } else if (converted_kana_len > 0) {
-                converted_kana_len--;
-                converted_kana_buffer[converted_kana_len] = 0;
+            } else if (s_final_output_len > 0) { // Backspace on final output
+                s_final_output_len--;
+                s_final_output_buffer[s_final_output_len] = 0;
             }
-        } else if (key == '\n') { 
-            if (input_romaji_len == 1 && input_romaji_buffer[0] == 'n') {
-                if(converted_kana_len < 255) {
-                    converted_kana_buffer[converted_kana_len++] = 0x82f1; // ん
-                }
-                input_romaji_len = 0;
-                input_romaji_buffer[0] = '\0';
-            }
-        } else if (key == ' ') {
-            if (input_romaji_len == 1 && input_romaji_buffer[0] == 'n') {
-                if(converted_kana_len < 255) {
-                    converted_kana_buffer[converted_kana_len++] = 0x82f1; // ん
+            s_current_candidate_index = 0; // Reset candidate selection on backspace
+            s_num_candidates = 0;
+            s_kouho_list[0] = '\0';
+            s_out_okuri[0] = '\0';
+        } else if (key == '\n') { // Enter key to commit
+            if (s_num_candidates > 0) {
+                char selected_kouho[256];
+                if (skk_engine.get_kouho(selected_kouho, s_kouho_list, s_current_candidate_index)) {
+                    char final_output_utf8[256];
+                    if (currentImeMode == IME_MODE_KATAKANA) {
+                        skk_engine.kana_to_katakana(final_output_utf8, selected_kouho);
+                    } else {
+                        strcpy(final_output_utf8, selected_kouho);
+                    }
+
+                    int utf8_len = strlen(final_output_utf8);
+                    int current_utf8_pos = 0;
+                    while (current_utf8_pos < utf8_len && s_final_output_len < 255) {
+                        char utf8_char_buf[5];
+                        int char_bytes = JString::get(utf8_char_buf, &final_output_utf8[current_utf8_pos]);
+                        if (char_bytes == 0) break;
+                        uint32_t unicode_char = JString::utf8to32(utf8_char_buf);
+                        s_final_output_buffer[s_final_output_len++] = (u16)unicode_char;
+                        current_utf8_pos += char_bytes;
+                    }
+                    s_final_output_buffer[s_final_output_len] = 0;
                 }
             }
             input_romaji_len = 0;
             input_romaji_buffer[0] = '\0';
+            s_current_candidate_index = 0;
+            s_num_candidates = 0;
+            s_kouho_list[0] = '\0';
+            s_out_okuri[0] = '\0';
+        } else if (key == ' ') { // Space key to commit or insert space
+            if (s_num_candidates > 0) {
+                char selected_kouho[256];
+                if (skk_engine.get_kouho(selected_kouho, s_kouho_list, s_current_candidate_index)) {
+                    char final_output_utf8[256];
+                    if (currentImeMode == IME_MODE_KATAKANA) {
+                        skk_engine.kana_to_katakana(final_output_utf8, selected_kouho);
+                    }
+                    else {
+                        strcpy(final_output_utf8, selected_kouho);
+                    }
 
-            if(converted_kana_len < 255) {
-                converted_kana_buffer[converted_kana_len++] = 0x8140; // Space
+                    int utf8_len = strlen(final_output_utf8);
+                    int current_utf8_pos = 0;
+                    while (current_utf8_pos < utf8_len && s_final_output_len < 255) {
+                        char utf8_char_buf[5];
+                        int char_bytes = JString::get(utf8_char_buf, &final_output_utf8[current_utf8_pos]);
+                        if (char_bytes == 0) break;
+                        uint32_t unicode_char = JString::utf8to32(utf8_char_buf);
+                        s_final_output_buffer[s_final_output_len++] = (u16)unicode_char;
+                        current_utf8_pos += char_bytes;
+                    }
+                    s_final_output_buffer[s_final_output_len] = 0;
+                }
+            } else { // No candidates, just insert a space
+                if(s_final_output_len < 255) {
+                    s_final_output_buffer[s_final_output_len++] = 0x0020; // Unicode Space
+                }
+                s_final_output_buffer[s_final_output_len] = 0;
             }
+            input_romaji_len = 0;
+            input_romaji_buffer[0] = '\0';
+            s_current_candidate_index = 0;
+            s_num_candidates = 0;
+            s_kouho_list[0] = '\0';
+            s_out_okuri[0] = '\0';
         } else { 
             if ((key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z')) {
                 if (input_romaji_len < 30) {
@@ -127,47 +207,94 @@ bool kanaIME_update(void) {
                     input_romaji_buffer[input_romaji_len] = '\0';
                 }
             } else { 
-                if(converted_kana_len < 255) {
-                    converted_kana_buffer[converted_kana_len++] = get_fullwidth_sjis((char)key);
+                if(s_final_output_len < 255) {
+                    s_final_output_buffer[s_final_output_len++] = get_fullwidth_sjis((char)key);
                 }
+                s_final_output_buffer[s_final_output_len] = 0;
             }
+            s_current_candidate_index = 0; // Reset candidate selection on new input
+            s_num_candidates = 0;
+            s_kouho_list[0] = '\0';
+            s_out_okuri[0] = '\0';
         }
     }
 
     // --- Romaji to Kana Conversion (SKK Integration) ---
-    char kouho_list[256];
-    char out_okuri[32];
+    // char kouho_list[256]; // Now static s_kouho_list
+    // char out_okuri[32];   // Now static s_out_okuri
     uint8_t skk_rc = 0;
 
-    if (input_romaji_len > 0) {
-        skk_rc = skk_engine.get_kouho_list(kouho_list, out_okuri, input_romaji_buffer);
+    // Only perform SKK lookup if input_romaji_buffer has changed or candidates are not yet loaded
+    if (input_romaji_len > 0 && s_num_candidates == 0) {
+        skk_rc = skk_engine.get_kouho_list(s_kouho_list, s_out_okuri, input_romaji_buffer);
+        if (skk_rc > 0) {
+            s_num_candidates = skk_engine.count_kouho_list(s_kouho_list);
+        } else {
+            s_num_candidates = 0;
+        }
     }
 
     converted_kana_len = 0;
     converted_kana_buffer[0] = 0;
 
-    if (skk_rc > 0) {
-        // For now, just take the first candidate
-        char first_kouho[256];
-        if (skk_engine.get_kouho(first_kouho, kouho_list, 0)) {
-            // Convert UTF-8 to NDS display format (u16, likely Shift-JIS or similar)
-            // This is a placeholder and needs proper UTF-8 to Shift-JIS/UTF-16 conversion
-            // For now, just copy as-is, assuming font can handle it or it's ASCII
-            int utf8_len = strlen(first_kouho);
-            int buffer_idx = 0;
-            int current_utf8_pos = 0;
-            while (current_utf8_pos < utf8_len && buffer_idx < 255) {
-                char utf8_char_buf[5]; // Max 4 bytes + null terminator
-                int char_bytes = JString::get(utf8_char_buf, &first_kouho[current_utf8_pos]);
-                if (char_bytes == 0) break; // Error or end of string
+    switch (currentImeMode) {
+        case IME_MODE_HIRAGANA:
+        case IME_MODE_KATAKANA:
+        case IME_MODE_DEBUG: // For now, DEBUG mode behaves like HIRAGANA
+            if (s_num_candidates > 0) {
+                char selected_kouho[256];
+                if (skk_engine.get_kouho(selected_kouho, s_kouho_list, s_current_candidate_index)) {
+                    char final_output_utf8[256];
+                    if (currentImeMode == IME_MODE_KATAKANA) {
+                        skk_engine.kana_to_katakana(final_output_utf8, selected_kouho);
+                    } else {
+                        strcpy(final_output_utf8, selected_kouho);
+                    }
 
-                uint32_t unicode_char = JString::utf8to32(utf8_char_buf);
-                converted_kana_buffer[buffer_idx++] = (u16)unicode_char; 
-                current_utf8_pos += char_bytes;
+                    int utf8_len = strlen(final_output_utf8);
+                    int buffer_idx = 0;
+                    int current_utf8_pos = 0;
+                    while (current_utf8_pos < utf8_len && buffer_idx < 255) {
+                        char utf8_char_buf[5]; // Max 4 bytes + null terminator
+                        int char_bytes = JString::get(utf8_char_buf, &final_output_utf8[current_utf8_pos]);
+                        if (char_bytes == 0) break; // Error or end of string
+
+                        uint32_t unicode_char = JString::utf8to32(utf8_char_buf);
+                        converted_kana_buffer[buffer_idx++] = (u16)unicode_char; 
+                        current_utf8_pos += char_bytes;
+                    }
+                    converted_kana_len = buffer_idx;
+                    converted_kana_buffer[converted_kana_len] = 0; // Null terminate
+                }
+            } else if (input_romaji_len > 0) {
+                // If no SKK candidates, just display the romaji input as hiragana (temporary)
+                char temp_hiragana[32];
+                JString::roma_to_kana(temp_hiragana, input_romaji_buffer);
+                int utf8_len = strlen(temp_hiragana);
+                int buffer_idx = 0;
+                int current_utf8_pos = 0;
+                while (current_utf8_pos < utf8_len && buffer_idx < 255) {
+                    char utf8_char_buf[5];
+                    int char_bytes = JString::get(utf8_char_buf, &temp_hiragana[current_utf8_pos]);
+                    if (char_bytes == 0) break;
+                    uint32_t unicode_char = JString::utf8to32(utf8_char_buf);
+                    converted_kana_buffer[buffer_idx++] = (u16)unicode_char;
+                    current_utf8_pos += char_bytes;
+                }
+                converted_kana_len = buffer_idx;
+                converted_kana_buffer[converted_kana_len] = 0;
             }
-            converted_kana_len = buffer_idx;
+            break;
+
+        case IME_MODE_ENGLISH:
+            // In English mode, just display the romaji input directly
+            // No SKK lookup needed
+            for (int i = 0; i < input_romaji_len && i < 255; i++) {
+                converted_kana_buffer[i] = (u16)input_romaji_buffer[i];
+            }
+            converted_kana_len = input_romaji_len;
             converted_kana_buffer[converted_kana_len] = 0; // Null terminate
-        }
+            break;
     }
 
     // --- Drawing ---
@@ -184,6 +311,43 @@ bool kanaIME_update(void) {
 
     // Draw debug info
     char debug_str[128];
+
+    // Draw candidates
+    if (s_num_candidates > 0) {
+        int candidate_y = 70;
+        for (int i = 0; i < s_num_candidates; i++) {
+            char candidate_utf8[256];
+            if (skk_engine.get_kouho(candidate_utf8, s_kouho_list, i)) {
+                char final_output_utf8[256];
+                if (currentImeMode == IME_MODE_KATAKANA) {
+                    skk_engine.kana_to_katakana(final_output_utf8, candidate_utf8);
+                } else {
+                    strcpy(final_output_utf8, candidate_utf8);
+                }
+
+                u16 candidate_u16[256];
+                int utf8_len = strlen(final_output_utf8);
+                int buffer_idx = 0;
+                int current_utf8_pos = 0;
+                while (current_utf8_pos < utf8_len && buffer_idx < 255) {
+                    char utf8_char_buf[5];
+                    int char_bytes = JString::get(utf8_char_buf, &final_output_utf8[current_utf8_pos]);
+                    if (char_bytes == 0) break;
+                    uint32_t unicode_char = JString::utf8to32(utf8_char_buf);
+                    candidate_u16[buffer_idx++] = (u16)unicode_char;
+                    current_utf8_pos += char_bytes;
+                }
+                candidate_u16[buffer_idx] = 0;
+
+                u16 color = RGB15(31,31,31); // Default color
+                if (i == s_current_candidate_index) {
+                    color = RGB15(31,0,0); // Highlight selected candidate (Red)
+                }
+                drawStringU16(10, candidate_y, mainScreenBuffer, candidate_u16, color); 
+                candidate_y += 12; // Move to next line
+            }
+        }
+    }
 
     const char* mode_prompt = "";
     switch (currentImeMode) {
