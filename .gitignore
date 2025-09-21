@@ -1,0 +1,12 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.elf
+*.nds
+*.gba
+*.bin
+*.map
+
+# User-specific logs
+作業ログ_2025-09-21.txt
