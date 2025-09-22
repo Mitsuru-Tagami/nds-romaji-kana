@@ -1,0 +1,7 @@
+Here are the options for the next steps:
+
+1. Revert to the working build: If you want to continue testing the basic IME functionality, we can revert the changes in the Makefile and kana_ime.cpp to disable libfat and SKK again.
+
+2. Focus on libfat DLDI issue: This would involve further investigation of your devkitPro environment, possibly with external help.
+
+3. Continue with other IME features (without compilation): We could discuss further IME features, but I wouldn't be able to compile and test them.

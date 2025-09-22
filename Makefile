@@ -52,7 +52,7 @@ $(BUILD):
 
 $(BUILD)/$(TARGET).elf: $(OBJECTS)
 	@echo "LINKING $(notdir $@)"
-	$(CXX) -specs=ds_arm9.specs -g -mthumb -mthumb-interwork -Wl,-Map,$(notdir $@).map -L/opt/devkitpro/libnds/lib -L/opt/devkitpro/libfat/lib -o $@ $^ -lnds9 -lfat -ldldi
+	$(CXX) -specs=ds_arm9.specs -g -mthumb -mthumb-interwork -Wl,-Map,$(notdir $@).map -L/opt/devkitpro/libnds/lib -L/opt/devkitpro/libfat/lib -o $@ $^ -lnds9 -lfat
 
 ELF2NDS := ndstool -c
 $(BUILD)/$(TARGET).nds: $(BUILD)/$(TARGET).elf

@@ -2,18 +2,11 @@
 
 #define RKTBLSIZE (sizeof(r_table)/sizeof(r_table[0]))               // ローマ字テーブルサイズ
 
-#if defined(ARDUINO_ARCH_AVR)
-#include "romakana.h"
-#include <avr/pgmspace.h>
-#define pgm_str(str) pgm_read_word(&(str))                           // AVR PGM文字列アドレス参照マクロ関数
-#define strlen_pgm(str) strlen_P(pgm_str(str))                       // AVR PGM文字列長さ取得参照マクロ関数
-#define strcpy_pgm(dst,src)	strcpy_P((char *)&dst, pgm_str(src))     // AVR PGM strcpyマクロ関数  
-
-#else
-#define pgm_str(str) (str)                                           // AVR PGM互換文字列アドレス参照マクロ関数
-#define strlen_pgm(str) strlen(str)                                  // AVR PGM互換文字列長さ取得参照マクロ関数
-#define strcpy_pgm(dst,src)	strcpy((char *)&dst, src)                // AVR PGM互換 strcpyマクロ関数  
-
+// NDS environment uses standard string functions.
+// These macros are for compatibility with the original AVR code.
+#define pgm_str(str) (str)
+#define strlen_pgm(str) strlen(str)
+#define strcpy_pgm(dst,src)	strcpy((char *)&dst, src)
 
 // ローマ字テーブル
 static const char* r_table[] = {
@@ -56,7 +49,6 @@ static const char* h_table[] = {
     "ぉ","っ","っ","ぅ","ゃ","ぇ","ぃ","ょ","ゅ","や","いぇ","い","よ","ゆ","ざ",
     "ぜ","じ","ぞ","ず","じゃ","じぇ","じぃ","じょ","じゅ",
 };
-#endif
 
 // 文字列バイト数の取得
 uint16_t JString::bytes(const char* text) {
@@ -229,14 +221,9 @@ int16_t binfind(const char* key, uint8_t cmplen) {
 
 	for(;;) {
 		pos = t_p + ((e_p - t_p+1)>>1);
-#if defined(ARDUINO_ARCH_AVR)
-    strcpy_pgm(roma_str, r_table[pos]);
-		rc = strncasecmp(key, roma_str, cmplen);
-#else
 		rc = strncasecmp(key, r_table[pos], cmplen);
-#endif
-    if (rc == 0) {        // 等しい
-        flg_stop = 1;  
+        if (rc == 0) {        // 等しい
+            flg_stop = 1;  
 			break;
 		} else if (rc > 0) {  // 大きい
 			t_p = pos + 1;   
@@ -327,7 +314,7 @@ uint16_t JString::roma_to_kana(char* dst, char* src) {
 	for(;;) {
 		if (src_pos >= src_len)
 			break;
-    index = get_roma_index(&src[src_pos]);
+        index = get_roma_index(&src[src_pos]);
 		if (index  >= 0) {
 		//if ((index = get_roma_index(&src[src_pos])) >= 0) {
 			// ローマ字変換可能

@@ -14,7 +14,7 @@
 
 class SKK {
  private:
-  FILE*  fp_skk;                       // 辞書ファイルポインタ
+  const unsigned char*  fp_skk_data;                       // 辞書データポインタ
   uint32_t size_keyword;              // 辞書登録単語数
   uint32_t keyword_index_top;         // キーワードインデックス先頭位置
   uint32_t keyword_data_top;          // キーワードデータ先頭位置

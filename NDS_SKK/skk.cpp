@@ -10,30 +10,22 @@
 
 #include "JString.h"
 #include "skk.h"
+#include "test_skk_dict_data.h" // Include embedded dictionary data
 
 // #define SSK_BINDIC_FILE 	"ssk_mdic.bin" // Defined in skk.h
 #define SSK_BIN_HEAD_SIZE 12
 
 // skkの開始
-//  引数 param_path: 辞書ファイルの格納ディレクトリ
+//  引数 param_path: 辞書ファイルの格納ディレクトリ (ignored for embedded dict)
 //
 uint32_t SKK::begin(const char* param_path) {
-	char path[64] = ""; 
+	// char path[64] = ""; // Not needed for embedded dict
 	uint32_t rc; // Declared here
 
-	// fatMountDefault() should be called once in NDS initialization
-	// For now, assume it's handled or will be called in kanaIME_init()
+	// For embedded dictionary, we don't need to open a file
+	// We just set the internal pointer to the start of the array
+	fp_skk_data = (const unsigned char*)embedded_skk_dict;
 
-	// ファイルパスの作成
-	if (param_path != NULL) {
-		strcat(path, param_path);
-	}
-	strcat(path, SSK_BINDIC_FILE);
-
-	// 辞書ファイルのオープン
-	if (!(fp_skk = fopen(path, "rb"))) {
-		return 0;
-	}
 	rc = load_skk_header();
   //Serial.println("ok");
 	return rc;
@@ -41,16 +33,17 @@ uint32_t SKK::begin(const char* param_path) {
 
 // skkの終了
 uint8_t SKK::end() {
-	fclose(fp_skk);
+	// No file to close for embedded dict
 	return 0;
 }
 
 // skk辞書ファイルのヘッダー読み込み
 uint32_t SKK::load_skk_header() {
 	// ヘッダー情報の格納
-	fread(&size_keyword, 4, 1, fp_skk);
-	fread(&keyword_index_top, 4, 1, fp_skk);
-	fread(&keyword_data_top, 4, 1, fp_skk);
+	// Read from embedded_skk_dict array
+	memcpy(&size_keyword, fp_skk_data + 0, 4);
+	memcpy(&keyword_index_top, fp_skk_data + 4, 4);
+	memcpy(&keyword_data_top, fp_skk_data + 8, 4);
 	return size_keyword;
 }
 
@@ -66,25 +59,15 @@ uint8_t SKK::get_keyword(const char* keyword, uint32_t index) {
 	int rc;
 	uint8_t c;
 
-	// インデックスの格納の位置の取得	
-	if ( fseek(fp_skk, SSK_BIN_HEAD_SIZE + index*4, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
-	fread(&pos, 4, 1, fp_skk);
+	// Read from embedded_skk_dict array
+	memcpy(&pos, fp_skk_data + SSK_BIN_HEAD_SIZE + index*4, 4);
 
 	// キーワードの取得
-	if ( fseek(fp_skk, pos + keyword_data_top, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
+	const unsigned char* current_ptr = fp_skk_data + pos + keyword_data_top;
 
 	int i = 0;
 	for(;;) {
-		rc = fread(&c, 1, 1, fp_skk);
-		if (rc != 1) {
-			return 0;
-		}
+		c = *current_ptr++;
 		if (c == ',') {
 			((char *)keyword)[i] = '\0';
 			break;
@@ -111,29 +94,20 @@ uint8_t SKK::get_keywordData(const char* data , uint32_t index) {
 	if (index >= size_keyword)
 		return 0;
 	
-	// インデックスの格納の位置の取得	
-	if ( fseek(fp_skk, SSK_BIN_HEAD_SIZE + index*4, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
-
-	fread(&pos, 4, 1, fp_skk);
+	// Read from embedded_skk_dict array
+	memcpy(&pos, fp_skk_data + SSK_BIN_HEAD_SIZE + index*4, 4);
 	if (index != size_keyword-1) {
-		fread(&pos_next, 4, 1, fp_skk);
+		memcpy(&pos_next, fp_skk_data + SSK_BIN_HEAD_SIZE + (index+1)*4, 4);
 		size = pos_next - pos;
 	} else {
-		size = 30; // 最終データの場合、仮サイズを指定
+		size = 30; // 最終データの場合、仮サイズを指定 (This might need adjustment based on actual last entry size)
 	}
 
-	if ( fseek(fp_skk, pos + keyword_data_top, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
-	rc = fread((void *)data, 1, size, fp_skk);
-	if (rc > 0)
-		((char *)data)[rc] = '\0'; // Ensure null termination
-	if (rc > max_data_len) {
-		max_data_len = rc;
+	memcpy((void *)data, fp_skk_data + pos + keyword_data_top, size);
+	if (size > 0)
+		((char *)data)[size] = '\0'; // Ensure null termination
+	if (size > max_data_len) {
+		max_data_len = size;
 		max_data_len_index = index;
 	}
 	return 1;
@@ -365,38 +339,28 @@ uint16_t  SKK::count_kouho_list_by_index(uint32_t key_index) {
 	uint16_t cnt=0;
 	uint32_t pos, pos_next; // キーワード格納位置
 	uint32_t size;
-	int rc;
-	char c;
+	// int rc; // Not used
+	// char c; // Not used
 	
 	if (key_index >= size_keyword)
 		return 0;
 	
 	// インデックスの格納の位置の取得	
-	if ( fseek(fp_skk, SSK_BIN_HEAD_SIZE + key_index*4, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
-
-	fread(&pos, 4, 1, fp_skk);
+	memcpy(&pos, fp_skk_data + SSK_BIN_HEAD_SIZE + key_index*4, 4);
 	if (key_index != size_keyword-1) {
-		fread(&pos_next, 4, 1, fp_skk);
+		memcpy(&pos_next, fp_skk_data + SSK_BIN_HEAD_SIZE + (key_index+1)*4, 4);
 		size = pos_next - pos;
 	} else {
 		size = 30; // 最終データの場合、仮サイズを指定
 	}
 
-	if ( fseek(fp_skk, pos + keyword_data_top, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
+	const unsigned char* current_ptr = fp_skk_data + pos + keyword_data_top;
 
 	// ','の個数を数える
     for (uint16_t i = 0; i<size; i++) {
-		rc = fread(&c, 1, 1, fp_skk);
-		if (rc != 1)
-			break;
-		if (c == ',')
+		if (*current_ptr == ',')
 			cnt++;
+		current_ptr++;
 	}
 	if (cnt>1)
 		// 先頭のキーの分を引く
@@ -466,8 +430,8 @@ uint8_t SKK::get_kouho_by_index(const char* kouho, uint16_t list_index, uint16_t
 	uint16_t cnt=0;
 	uint32_t pos, pos_next; // キーワード格納位置
 	uint32_t size;
-	int rc;
-	char c;
+	// int rc; // Not used
+	// char c; // Not used
 	uint8_t flg_found = 0;
 	char* ptr_kouho = (char*)kouho;
 
@@ -475,32 +439,22 @@ uint8_t SKK::get_kouho_by_index(const char* kouho, uint16_t list_index, uint16_t
 		return 0;
 	
 	// インデックスの格納の位置の取得	
-	if ( fseek(fp_skk, SSK_BIN_HEAD_SIZE + key_index*4, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
-
-	fread(&pos, 4, 1, fp_skk);
+	memcpy(&pos, fp_skk_data + SSK_BIN_HEAD_SIZE + key_index*4, 4);
 	if (list_index != size_keyword-1) {
-		fread(&pos_next, 4, 1, fp_skk);
+		memcpy(&pos_next, fp_skk_data + SSK_BIN_HEAD_SIZE + (key_index+1)*4, 4);
 		size = pos_next - pos;
 	} else {
 		size = 30; // 最終データの場合、仮サイズを指定
 	}
 
-	if ( fseek(fp_skk, pos + keyword_data_top, SEEK_SET) != 0 ) {
-		// シーク失敗
-		return 0;
-	}
+	const unsigned char* current_ptr = fp_skk_data + pos + keyword_data_top;
 
 	// ','の個数を数える
     for (uint16_t i = 0; i<size; i++) {
 		if (cnt == list_index+1) {
 			flg_found = 1; // 該当キー位置に到達した
 		}
-		rc = fread(&c, 1, 1, fp_skk);
-		if (rc != 1)
-			break; // ファイルの末端に到達
+		char c = *current_ptr++;
 		
 		if (c == ',') {
 			if (flg_found) break;  // 該当位置から次の位置に到達した
