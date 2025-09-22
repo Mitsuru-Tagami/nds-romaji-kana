@@ -33,7 +33,7 @@ def convert_skk_dict_to_c_array(input_file, output_file):
         
         # Format: yomi,candidate1,candidate2,...
         entry_str = entry['yomi'] + "," + ",".join(entry['candidates'])
-        data_part += entry_str.encode('utf-8') + b'\0' # Null-terminate each entry
+        data_part += entry_str.encode('shift_jis') + b'\0' # Null-terminate each entry
 
     # Calculate header values
     size_keyword = len(entries)
