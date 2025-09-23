@@ -9,7 +9,7 @@ endif
 
 include $(DEVKITARM)/ds_rules
 
-NDS_SKK_DIR := NDS_SKK
+NDS_SKK_DIR := src
 
 TARGET := nds_skk_ime
 BUILD := build
@@ -19,17 +19,16 @@ CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti
 
 all: $(BUILD)/$(TARGET).nds
 
-SOURCES := $(NDS_SKK_DIR)/main.c \
-           $(NDS_SKK_DIR)/kana_ime.cpp \
-           $(NDS_SKK_DIR)/skk.cpp \
-           $(NDS_SKK_DIR)/JString.cpp \
-           draw_font.c \
-           mplus_font_10x10.c \
-           mplus_font_10x10alpha.c
+SOURCES := src/main.c \
+           src/kana_ime.cpp \
+           src/skk.cpp \
+           src/JString.cpp \
+           src/draw_font.c \
+           src/mplus_font_10x10.c \
+           src/mplus_font_10x10alpha.c
 
-OBJECTS := $(patsubst $(NDS_SKK_DIR)/%.c,$(BUILD)/%.o,$(filter $(NDS_SKK_DIR)/%.c,$(SOURCES))) \
-           $(patsubst $(NDS_SKK_DIR)/%.cpp,$(BUILD)/%.o,$(filter $(NDS_SKK_DIR)/%.cpp,$(SOURCES))) \
-           $(patsubst %.c,$(BUILD)/%.o,$(filter-out $(NDS_SKK_DIR)/%.c,$(filter %.c,$(SOURCES))))
+OBJECTS := $(patsubst src/%.c,$(BUILD)/%.o,$(filter src/%.c,$(SOURCES))) \
+           $(patsubst src/%.cpp,$(BUILD)/%.o,$(filter src/%.cpp,$(SOURCES)))
 
 # Rule for C files in the current directory
 $(BUILD)/%.o: %.c | $(BUILD)

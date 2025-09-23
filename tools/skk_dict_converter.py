@@ -64,7 +64,7 @@ def convert_skk_dict_to_c_array(input_file, output_file):
             f.write(f"0x{byte:02x},")
             if i % 16 == 15:
                 f.write("\n")
-        f.write("\n};\n")
+        f.write("\n};")
 
 if __name__ == "__main__":
-    convert_skk_dict_to_c_array("test_skk_dict.txt", "test_skk_dict_data.h")
+    convert_skk_dict_to_c_array("../dict/test_skk_dict.txt", "../src/test_skk_dict_data.h")
