@@ -11,12 +11,17 @@ build/
 # User-specific logs
 作業ログ*.txt
 gemini_chat_log_*.txt
+plan.txt
+
+# Generated dictionary data
+NDS_SKK/test_skk_dict_data.h
+
+# User-organized files
+misc/
 
 # Unused font files
 ipaex_font_data.c
 ipaex_font_sheet.png
 
 # Cloned source for analysis
-OpenWnn/
-fcitx5-skk/
 arduino_skk/
