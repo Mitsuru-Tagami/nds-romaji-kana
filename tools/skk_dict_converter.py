@@ -2,10 +2,10 @@ import struct
 
 def convert_skk_dict_to_c_array(input_file, output_file):
     entries = []
-    with open(input_file, 'r', encoding='utf-8') as f:
+    with open(input_file, 'r', encoding='euc-jp') as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith(';;'):
                 continue
             
             parts = line.split(' /', 1)
@@ -67,4 +67,4 @@ def convert_skk_dict_to_c_array(input_file, output_file):
         f.write("\n};")
 
 if __name__ == "__main__":
-    convert_skk_dict_to_c_array("../dict/test_skk_dict.txt", "../src/test_skk_dict_data.h")
+    convert_skk_dict_to_c_array("dict/SKK-JISYO.S", "src/test_skk_dict_data.h")

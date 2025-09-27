@@ -12,6 +12,8 @@
 #define SSK_BINDIC_FILE 	  "ssk_dic_m.bin"
 #define SSK_BIN_HEAD_SIZE 	12
 
+#define SKK_KOUHO_BUFFER_SIZE 1024
+
 class SKK {
  private:
   const unsigned char*  fp_skk_data;                       // 辞書データポインタ
@@ -28,17 +30,17 @@ class SKK {
  private:   
   uint32_t  load_skk_header();                                             // SKK辞書ヘッダー情報の取得(内部処理用)
   uint8_t   get_keyword(const char* keyword, uint32_t index);              // 指定位置のキーワードの取得(内部処理用)
-  uint8_t   get_keywordData(const char* data , uint32_t index);            // 指定位置のキーワード+候補リストの取得(内部処理用)
+  uint8_t   get_keywordData(char* data, uint32_t index, size_t buffer_size);            // 指定位置のキーワード+候補リストの取得(内部処理用)
   int32_t   binfind(const char* key, uint32_t n);                          // SKK辞書検索((内部処理用)
   void      word2lower(char* token);                                       // 英字小文字変換((内部処理用)
   void      splitOkuri(char* keyword, char* okuri, char* token);           // 入力をキーワードと送りに分離(内部処理用)
 
  public:
-  uint8_t   get_kouho_list(char* kouho_list, char* out_okuri, char* in_token);               // 入力文字で辞書検索
+  uint8_t   get_kouho_list(char* kouho_list, char* out_okuri, char* in_token);               // 入力かな文字列で辞書検索
   uint8_t   get_kouho_list_index(uint32_t* kouho_list_index, char* out_okuri, char* token);  // 入力文字で辞書検索(該当候補のindexを返す)
   uint16_t  count_kouho_list(const char* kouho_list);                                        // 候補リスト内の単語数のカウント
   uint16_t  count_kouho_list_by_index(uint32_t key_index);                                   // 直接辞書ファイルから候補リスト内の単語数のカウント
-  uint8_t   get_kouho(const char* kouho, const char* kouho_list, uint16_t list_index);       // 候補リスト内の指定位置の単語の取得
+  uint8_t   get_kouho(char* kouho, const char* kouho_list, uint16_t list_index, size_t buffer_size);       // 候補リスト内の指定位置の単語の取得
   uint8_t   get_kouho_by_index(const char* kouho, uint16_t list_ndex, uint16_t key_index);   // 直接辞書ファイルから候補リスト内の指定位置の単語の取得
   uint16_t  kana_to_katakana(const char* dst, const char* src);                              // かな⇒カタカナ変換
   void      han_to_zen(const char* dst, const char* src);                                    // 半角⇒全角変換

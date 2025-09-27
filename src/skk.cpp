@@ -82,11 +82,12 @@ uint8_t SKK::get_keyword(const char* keyword, uint32_t index) {
 //  引数
 //   data:   変換候補リスト(カンマ区切り)の格納先
 //   index:  キーワードのインデックス番号
+//   buffer_size: dataバッファのサイズ
 //  戻り値
 //   正常終了:1
 //   異常終了:0
 //
-uint8_t SKK::get_keywordData(const char* data , uint32_t index) {
+uint8_t SKK::get_keywordData(char* data , uint32_t index, size_t buffer_size) {
 	uint32_t pos, pos_next; // キーワード格納位置
 	uint32_t size;
 	int rc;
@@ -103,9 +104,9 @@ uint8_t SKK::get_keywordData(const char* data , uint32_t index) {
 		size = 30; // 最終データの場合、仮サイズを指定 (This might need adjustment based on actual last entry size)
 	}
 
-	memcpy((void *)data, fp_skk_data + pos + keyword_data_top, size);
-	if (size > 0)
-		((char *)data)[size] = '\0'; // Ensure null termination
+	size_t bytes_to_copy = (size < buffer_size - 1) ? size : (buffer_size - 1);
+	memcpy((void *)data, fp_skk_data + pos + keyword_data_top, bytes_to_copy);
+	((char *)data)[bytes_to_copy] = '\0'; // Ensure null termination
 	if (size > max_data_len) {
 		max_data_len = size;
 		max_data_len_index = index;
@@ -187,8 +188,6 @@ void SKK::splitOkuri(char* keyword, char* okuri, char* token) {
 			strcpy((char*)keyword, token);
 			((char*)okuri)[0] = '\0';
 		}
-	} else {
-		strcpy((char*)keyword, token);
 	}
 	word2lower(keyword);
 	word2lower(okuri);
@@ -204,56 +203,22 @@ void SKK::splitOkuri(char* keyword, char* okuri, char* token) {
 //    0:候補なし 1:候補あり(送りあり) 2:候補あり(送りなし) 3:候補あり(英単語)
 //
 uint8_t SKK::get_kouho_list(char* kouho_list, char* out_okuri, char* in_token) {
-	char keyword[32];
-	char okuri[32];
-	char key[64];
-	uint16_t key_len;
 	int32_t pos;
 	uint8_t rc;
 
-	// 送り処理
-	splitOkuri(keyword, okuri, in_token);
-	if (strlen(okuri)) {
-		// 送りがある場合
-		
-		// key にキーワードをセット
-		JString::roma_to_kana(key, keyword);
-		key_len = strlen(key);
-		key[key_len] = okuri[0];
-		key[key_len+1] = '\0';
-		
-		// 候補の位置を検索
-		pos = binfind(key, size_keyword); 
-		if (pos > 0) {
-			// 該当データあり
-			rc = get_keywordData(kouho_list, pos);     // 候補データの取得
-			JString::roma_to_kana(out_okuri, okuri);   // 送りローマ字を「ひらがな」に変換
-			return 1;
-		} else {
-			((char*)kouho_list)[0] = '\0';
-			((char*)out_okuri)[0] = '\0';
-			return 0;
-		}
+	// With the new refactoring, in_token is a pre-converted kana string.
+	// The romaji-based splitOkuri logic is no longer applicable.
+	// We now directly search the dictionary with the given kana string.
+	((char*)out_okuri)[0] = '\0';
+
+	pos = binfind(in_token, size_keyword);
+	if (pos >= 0) {
+		rc = get_keywordData(kouho_list, pos, SKK_KOUHO_BUFFER_SIZE);
+		return 2; // Return 2: Found candidates (no okuri)
 	} else {
-        // 送りなし
-		JString::roma_to_kana(key, keyword);
-		pos = binfind(key, size_keyword);
-		if (pos > 0) {
-			rc = get_keywordData(kouho_list, pos);
-			((char*)out_okuri)[0] = '\0';
-			return 2;
-		} else {
-			// 候補がない場合、英単語として検索を試みる
-			pos = binfind(in_token, size_keyword);
-			if (pos > 0) {
-				rc = get_keywordData(kouho_list, pos);
-				((char*)out_okuri)[0] = '\0';
-				return 3;         
-			}
-			((char*)kouho_list)[0] = '\0';
-			((char*)out_okuri)[0] = '\0';
-			return 0;
-		}
+		// No candidates found for the given kana string.
+		((char*)kouho_list)[0] = '\0';
+		return 0;
 	}
 }
 
@@ -295,7 +260,8 @@ uint8_t SKK::get_kouho_list_index(uint32_t* out_kouho_index, char* out_okuri, ch
 			((char*)out_okuri)[0] = '\0';
 			return 0;
 		}
-	} else {
+	}
+	else {
         // 送りなし
 		JString::roma_to_kana(key, keyword);
 		pos = binfind(key, size_keyword);
@@ -333,51 +299,17 @@ uint16_t SKK::count_kouho_list(const char* kouho_list) {
 	return cnt;
 }
 
-// 直接辞書ファイルから候補リスト内の候補数のカウント
-
-uint16_t  SKK::count_kouho_list_by_index(uint32_t key_index) {
-	uint16_t cnt=0;
-	uint32_t pos, pos_next; // キーワード格納位置
-	uint32_t size;
-	// int rc; // Not used
-	// char c; // Not used
-	
-	if (key_index >= size_keyword)
-		return 0;
-	
-	// インデックスの格納の位置の取得	
-	memcpy(&pos, fp_skk_data + SSK_BIN_HEAD_SIZE + key_index*4, 4);
-	if (key_index != size_keyword-1) {
-		memcpy(&pos_next, fp_skk_data + SSK_BIN_HEAD_SIZE + (key_index+1)*4, 4);
-		size = pos_next - pos;
-	} else {
-		size = 30; // 最終データの場合、仮サイズを指定
-	}
-
-	const unsigned char* current_ptr = fp_skk_data + pos + keyword_data_top;
-
-	// ','の個数を数える
-    for (uint16_t i = 0; i<size; i++) {
-		if (*current_ptr == ',')
-			cnt++;
-		current_ptr++;
-	}
-	if (cnt>1)
-		// 先頭のキーの分を引く
-		cnt--;
-	return cnt;
-}
-
 //
 // 候補データからデータの取得
 //  引数
 //   kouho:       候補(単語)の格納先(out)
 //   kouho_list:  候補リスト(in)
 //   list_index:  候補データ内データ位置(in)
+//   buffer_size: kouhoバッファのサイズ
 //  戻り値
 //   0:データなし 1:データあり    
 //
-uint8_t SKK::get_kouho(const char* kouho, const char* kouho_list, uint16_t list_index) {
+uint8_t SKK::get_kouho(char* kouho, const char* kouho_list, uint16_t list_index, size_t buffer_size) {
 	char *src = (char*)kouho_list;
 	uint16_t top = 0;
 	uint16_t pos;
@@ -408,12 +340,20 @@ uint8_t SKK::get_kouho(const char* kouho, const char* kouho_list, uint16_t list_
 
 	// データと取り出し
 	char* dst = (char*)kouho;
-	while(true) {
+	size_t copied_bytes = 0;
+	while(copied_bytes < buffer_size - 1) { // Ensure space for null terminator
 		*dst++ = *src++;
-		if (*src == ',' || *src == '\0') {
+		copied_bytes++;
+		if (*src == ',') { 
 			*dst = '\0';
 			break;
+		} else if (*src == '\0') { 
+			*dst = '\0';			
+			break;
 		}
+	}
+	if (copied_bytes == buffer_size - 1) { // If buffer full, ensure null termination
+		*dst = '\0';
 	}
 	return 1;
 }
@@ -440,7 +380,7 @@ uint8_t SKK::get_kouho_by_index(const char* kouho, uint16_t list_index, uint16_t
 	
 	// インデックスの格納の位置の取得	
 	memcpy(&pos, fp_skk_data + SSK_BIN_HEAD_SIZE + key_index*4, 4);
-	if (list_index != size_keyword-1) {
+	if (key_index != size_keyword-1) {
 		memcpy(&pos_next, fp_skk_data + SSK_BIN_HEAD_SIZE + (key_index+1)*4, 4);
 		size = pos_next - pos;
 	} else {
@@ -538,4 +478,3 @@ void SKK::han_to_zen(const char* dst, const char* src) {
 		dst_ptr += dst_nbytes;
 	}
 }
-
