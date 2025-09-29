@@ -149,6 +149,21 @@ void kanaIME_init(void) {
     }
 }
 
+static u16 sjisToFontIndex(u16 sjis_code) {
+    // ひらがな (0x829F - 0x82F1) -> 0x0000 - 0x0052
+    if (sjis_code >= 0x829F && sjis_code <= 0x82F1) {
+        return sjis_code - 0x829F;
+    }
+    // カタカナ (0x8340 - 0x8396) -> 0x0053 - 0x00A9
+    if (sjis_code >= 0x8340 && sjis_code <= 0x8396) {
+        return sjis_code - 0x8340 + 0x0053;
+    }
+    // その他の文字 (ASCIIなど) はそのまま返すか、適切な範囲にマッピング
+    // 現状ではASCIIは1バイト文字として扱われるので、ここでは2バイト文字の範囲を想定
+    // 必要に応じて他の範囲のSJISコードもマッピングを追加
+    return sjis_code; // デフォルトではそのまま返す
+}
+
 static void convertRomajiToKana() {
     converted_kana_len = 0;
     converted_kana_buffer[0] = 0;
