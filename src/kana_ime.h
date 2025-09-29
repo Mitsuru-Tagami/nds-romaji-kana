@@ -32,6 +32,16 @@ typedef enum {
 
 extern ImeMode currentImeMode; // Global variable to hold the current mode
 
+// Detailed internal states of the IME
+typedef enum {
+	STATE_IDLE,              // Waiting for input
+	STATE_INPUT_ROMAJI,      // Inputting romaji characters
+	STATE_CONVERT_KOUHO,     // Selecting a conversion candidate
+	STATE_INPUT_ENGLISH,     // Direct English input
+} ImeState;
+
+extern ImeState currentImeState; // Global variable for the current internal state
+
 #ifdef __cplusplus
 }
 #endif
